@@ -6,7 +6,7 @@ async function handleRequest(request) {
   const html = `<!DOCTYPE html>
   <html>
     <head>
-      <link href="https://ripi.neocities.org/sing-ribet-convert.ico" rel="icon" type="image/x-icon" />
+      <link href="https://raw.githubusercontent.com/iyarivky/sing-ribet-api/main/media/sing-ribet-convert.ico" rel="icon" type="image/x-icon" />
       <title>sing-ribet API</title>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -60,7 +60,7 @@ async function handleRequest(request) {
       <div class="content">
         <h1>sing-ribet API</h1>
         <p>convert xray/v2ray url link to sing-box JSON.</p>
-        <a href="https://github.com/iyarivky" target="_blank">
+        <a href="https://github.com/iyarivky/sing-ribet-api" target="_blank">
           <i class="fa">&#xf09b;</i>
         </a>
       </div>
@@ -72,6 +72,7 @@ async function handleRequest(request) {
     <head>
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link href="https://raw.githubusercontent.com/iyarivky/sing-ribet-api/main/media/sing-ribet-convert.ico" rel="icon" type="image/x-icon" />
       <title>404 Freedom Not Found</title>
       <link href="https://fonts.cdnfonts.com/css/glitch-goblin" rel="stylesheet">
       <style>
