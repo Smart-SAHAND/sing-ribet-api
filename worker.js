@@ -1,6 +1,261 @@
+import { Base64 } from "js-base64"
+
 addEventListener('fetch', event => {
   event.respondWith(handleRequest(event.request))
 })
+
+async function v2rayToSing(v2rayAccount) {
+  let v2rayArrayUrl = v2rayAccount.split('|');
+  let ftpArrayUrl = v2rayArrayUrl.map(urlString => urlString.replace(/^[^:]+(?=:\/\/)/, 'ftp')); //convert v2ray urls to ftp url since WHATWG URL API is suck when dealing with other protocol
+
+  let resultParse = []
+
+  function parseVmessUrl(ftpArrayUrl) {
+    let ftpParsedUrl = ftpArrayUrl.substring(6)
+    let decodeResult = Base64.decode(ftpParsedUrl);
+    let parsedJSON = JSON.parse(decodeResult);
+    const configResult = {
+      tag: parsedJSON.ps || parsedJSON.add,
+      type: "vmess",
+      server: parsedJSON.add,
+      server_port: ~~parsedJSON.port,
+      uuid: parsedJSON.id,
+      security: "auto",
+      alter_id: ~~parsedJSON.aid,
+      global_padding: false,
+      authenticated_length: true,
+      multiplex: {
+        enabled: false,
+        protocol: "smux",
+        max_streams: 32
+      }
+    };
+
+    if (parsedJSON.port === "443" || parsedJSON.tls === "tls") {
+      configResult.tls = {
+        enabled: true,
+        server_name: parsedJSON.sni || parsedJSON.add,
+        insecure: true,
+        disable_sni: false
+      };
+    }
+
+    if (parsedJSON.net === "ws") {
+      configResult.transport = {
+        type: parsedJSON.net,
+        path: parsedJSON.path,
+        headers: {
+          Host: parsedJSON.host || parsedJSON.add
+        },
+        max_early_data: 0,
+        early_data_header_name: "Sec-WebSocket-Protocol"
+      };
+    } else if (parsedJSON.net === "grpc") {
+      configResult.transport = {
+        type: parsedJSON.net,
+        service_name: parsedJSON.path,
+        idle_timeout: "15s",
+        ping_timeout: "15s",
+        permit_without_stream: false
+      };
+    }
+    return configResult;
+  }
+
+  function parseVlessUrl(ftpArrayUrl) {
+    let ftpParsedUrl = new URL(ftpArrayUrl)
+    const configResult = {
+      tag: ftpParsedUrl.hash.substring(1) || ftpParsedUrl.hostname,
+      type: "vless",
+      server: ftpParsedUrl.hostname,
+      server_port: ~~ftpParsedUrl.port,
+      uuid: ftpParsedUrl.username,
+      flow: "",
+      packet_encoding: "xudp",
+      multiplex: {
+        enabled: false,
+        protocol: "smux",
+        max_streams: 32
+      }
+    };
+
+    if (ftpParsedUrl.port === "443" || ftpParsedUrl.searchParams.get("security") === "tls") {
+      configResult.tls = {
+        enabled: true,
+        server_name: ftpParsedUrl.searchParams.get("sni"),
+        insecure: true,
+        disable_sni: false
+      };
+    }
+
+    const transportTypes = {
+      ws: {
+        type: ftpParsedUrl.searchParams.get("type"),
+        path: ftpParsedUrl.searchParams.get("path"),
+        headers: {
+          Host: ftpParsedUrl.searchParams.get("host")
+        },
+        max_early_data: 0,
+        early_data_header_name: "Sec-WebSocket-Protocol"
+      },
+      grpc: {
+        type: ftpParsedUrl.searchParams.get("type"),
+        service_name: ftpParsedUrl.searchParams.get("serviceName"),
+        idle_timeout: "15s",
+        ping_timeout: "15s",
+        permit_without_stream: false
+      }
+    };
+
+    configResult.transport = transportTypes[ftpParsedUrl.searchParams.get("type")];
+
+    return configResult;
+  }
+
+  function parseTrojanUrl(ftpArrayUrl) {
+    let ftpParsedUrl = new URL(ftpArrayUrl)
+    const configResult = {
+      tag: ftpParsedUrl.hash.substring(1) || ftpParsedUrl.hostname,
+      type: "trojan",
+      server: ftpParsedUrl.hostname,
+      server_port: ~~ftpParsedUrl.port,
+      password: ftpParsedUrl.username,
+      multiplex: {
+        enabled: false,
+        protocol: "smux",
+        max_streams: 32
+      }
+    };
+
+    if (ftpParsedUrl.port === "443" || ftpParsedUrl.searchParams.get("security") === "tls") {
+      configResult.tls = {
+        enabled: true,
+        server_name: ftpParsedUrl.searchParams.get("sni"),
+        insecure: true,
+        disable_sni: false
+      };
+    }
+
+    const transportTypes = {
+      ws: {
+        type: ftpParsedUrl.searchParams.get("type"),
+        path: ftpParsedUrl.searchParams.get("path"),
+        headers: {
+          Host: ftpParsedUrl.searchParams.get("host")
+        },
+        max_early_data: 0,
+        early_data_header_name: "Sec-WebSocket-Protocol"
+      },
+      grpc: {
+        type: ftpParsedUrl.searchParams.get("type"),
+        service_name: ftpParsedUrl.searchParams.get("serviceName"),
+        idle_timeout: "15s",
+        ping_timeout: "15s",
+        permit_without_stream: false
+      }
+    };
+
+    configResult.transport = transportTypes[ftpParsedUrl.searchParams.get("type")];
+
+    return configResult;
+  }
+
+  function parseShadowsocksUrl(ftpArrayUrl) {
+    let ftpParsedUrl = new URL(ftpArrayUrl)
+    let encoded = decodeURIComponent(ftpParsedUrl.username);
+    let decodeResult = atob(encoded);
+    let shadowsocksPart = decodeResult.split(':');
+    const configResult = {
+      tag: ftpParsedUrl.hash.substring(1) || ftpParsedUrl.hostname,
+      type: "shadowsocks",
+      server: ftpParsedUrl.hostname,
+      server_port: ~~ftpParsedUrl.port,
+      method: shadowsocksPart[0],
+      password: shadowsocksPart[1],
+      plugin: "",
+      plugin_opts: ""
+    };
+    return configResult;
+  }
+
+  function parseShadowsocksRUrl(ftpArrayUrl) {
+    let ftpParsedUrl = ftpArrayUrl.substring(6)
+    let decodeResult = Base64.decode(ftpParsedUrl);
+    let [serverSSR, portSSR, protocolSSR, methodSSR, obfsSSR, passwordSSR] = decodeResult.split(':');
+    let params = new URLSearchParams(decodeResult.split('?')[1]);
+    let obfs_paramSSR = params.get('obfsparam');
+    let tagSSR = params.get('remarks');
+    let proto_paramSSR = params.get('protoparam');
+    const configResult = {
+      tag: Base64.decode(tagSSR),
+      type: "shadowsocksr",
+      server: serverSSR,
+      server_port: ~~portSSR,
+      method: methodSSR,
+      password: atob(passwordSSR.split('/')[0]),
+      obfs: obfsSSR,
+      obfs_param: atob(obfs_paramSSR),
+      protocol: protocolSSR,
+      protocol_param: atob(proto_paramSSR),
+    };
+    return configResult;
+  }
+
+  function parseSocksUrl(ftpArrayUrl) {
+    let ftpParsedUrl = new URL(ftpArrayUrl)
+    const configResult = {
+      tag: ftpParsedUrl.hash.substring(1) || ftpParsedUrl.hostname,
+      type: "socks",
+      server: ftpParsedUrl.hostname,
+      server_port: ~~ftpParsedUrl.port,
+      password: ftpParsedUrl.username,
+      version: "5"
+    };
+    return configResult;
+  }
+
+  function parseHttpUrl(ftpArrayUrl) {
+    let ftpParsedUrl = new URL(ftpArrayUrl)
+    const configResult = {
+      tag: ftpParsedUrl.hash.substring(1) || ftpParsedUrl.hostname,
+      type: "http",
+      server: ftpParsedUrl.hostname,
+      server_port: ~~ftpParsedUrl.port,
+      password: ftpParsedUrl.username,
+    };
+    return configResult;
+  }
+
+  const protocolMap = {
+    "vmess:": parseVmessUrl,
+    "vless:": parseVlessUrl,
+    "trojan:": parseTrojanUrl,
+    "trojan-go:": parseTrojanUrl,
+    "ss:": parseShadowsocksUrl,
+    "ssr:": parseShadowsocksRUrl,
+    "socks5:": parseSocksUrl,
+    "http:": parseHttpUrl
+  };
+
+  let v2rayLength = v2rayArrayUrl.length
+  for (let i = 0; i < v2rayLength; i++) {
+    let v2rayParsedUrl = new URL(v2rayArrayUrl[i])
+    //let ftpParsedUrl = new URL(ftpArrayUrl[i])
+
+    let configResult
+    const protocolHandler = protocolMap[v2rayParsedUrl.protocol];
+    if (protocolHandler) {
+      configResult = protocolHandler(ftpArrayUrl[i]);
+    } else {
+      console.log("Unsupported Protocol!")
+    }
+    const resultLength = resultParse.length;
+    resultParse[resultLength] = configResult;
+  }
+  return resultParse
+  //let singStringify = JSON.stringify(resultParse, null, 4);
+  //return singStringify
+}
 
 async function handleRequest(request) {
   const html = `<!DOCTYPE html>
@@ -108,10 +363,8 @@ async function handleRequest(request) {
   `
   const url = new URL(request.url);
   const path = url.pathname;
-  const simpleSfaConfig = url.searchParams.get('simpleSFA');
-  const simpleBfmConfig = url.searchParams.get('simpleBFM');
-  const baseSfaConfig = url.searchParams.get('baseSFA');
-  const baseBfmConfig = url.searchParams.get('baseBFM');
+  const account = url.searchParams.get("url")
+  const target = url.searchParams.get("target")
   
   // HomePage
   if (path === '/' || path === '') {
@@ -119,30 +372,13 @@ async function handleRequest(request) {
   }
 
   if (path === '/get') {
-    let responseText = '';
-    if (simpleSfaConfig) {
-      const accounts = simpleSfaConfig.split('|');
-      accounts.forEach(account => {
-        responseText += `${account} Hallo SFA Simple\n`;
-      });
-    } else if (simpleBfmConfig) {
-      const accounts = simpleBfmConfig.split('|');
-      accounts.forEach(account => {
-        responseText += `${account} Hallo BFM Simple\n`;
-      });
-    } else if (baseSfaConfig) {
-      const accounts = baseSfaConfig.split('|');
-      accounts.forEach(account => {
-        responseText += `${account} Hallo SFA Base\n`;
-      });
-    } else if (baseBfmConfig) {
-      const accounts = baseBfmConfig.split('|');
-      accounts.forEach(account => {
-        responseText += `${account} Hallo BFM Base\n`;
-      });
-    }
-    if (responseText) {
-      return new Response(responseText, {status: 200});
+    //let responseText = '';
+    //let splitAccount = account.split('|');
+    let convertAccount = await v2rayToSing(decodeURIComponent(account))
+    //if (target === "SFA"){}
+    let singStringify = JSON.stringify(convertAccount, null, 4);
+    if (singStringify) {
+      return new Response(singStringify, {status: 200});
     }
   }
   
